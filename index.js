@@ -22,9 +22,9 @@ const flagDeep = flags.includes('--deep');
 if (!input || flags.includes('--help')) {
   console.log(chalk.cyan.bold('\n  domain-scan') + chalk.gray(' — check domain availability across 30+ TLDs\n'));
   console.log(chalk.white('  Usage:  ') + chalk.green('npx domain-scan <name> [options]'));
-  console.log(chalk.white('  Example:') + chalk.gray(' npx domain-scan deckforge'));
-  console.log(chalk.gray('          npx domain-scan deckforge --deep'));
-  console.log(chalk.gray('          npx domain-scan deckforge --md\n'));
+  console.log(chalk.white('  Example:') + chalk.gray(' npx domain-scan myproject'));
+  console.log(chalk.gray('          npx domain-scan myproject --deep'));
+  console.log(chalk.gray('          npx domain-scan myproject --md\n'));
   console.log(chalk.yellow('  Options:'));
   console.log(chalk.green('    --deep') + chalk.gray('  Show full details (WHOIS, DNS, SSL, HTTP, hosting)'));
   console.log(chalk.green('    --md') + chalk.gray('    Save a detailed Markdown report to ./output_domain_checker/'));
@@ -46,10 +46,17 @@ const TLDS = [
   'com', 'net', 'org', 'io', 'ai', 'app', 'dev', 'co', 'me', 'us', 'info', 'biz', 'xyz',
   // Tech / niche
   'gg', 'tech', 'digital', 'online', 'site', 'store', 'cloud', 'pro', 'games', 'software',
+  'sh', 'cc', 'tv', 'to', 'so', 'vc',
+  // Creative / business
+  'art', 'design', 'agency', 'studio',
   // Brazil
   'com.br', 'net.br', 'org.br',
-  // International
-  'co.uk', 'de', 'fr', 'es', 'pt', 'eu', 'ca', 'com.au',
+  // Latam
+  'com.co', 'la',
+  // Europe
+  'co.uk', 'de', 'fr', 'es', 'pt', 'eu', 'nl', 'it', 'se',
+  // Asia / Oceania
+  'in', 'jp', 'kr', 'com.au', 'ca',
 ];
 
 const domains = TLDS.map(tld => `${name}.${tld}`);

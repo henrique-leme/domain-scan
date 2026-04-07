@@ -1,16 +1,21 @@
-# domain-checker
+# domain-scan
 
-CLI tool to check domain availability across 30+ TLDs at once. Gets WHOIS, DNS, SSL, and hosting info for each domain and generates a detailed Markdown report.
+CLI tool to check domain availability across 40+ TLDs at once — querying WHOIS and DNS directly, without going through registrar search pages.
+
+## Why?
+
+Registrars like GoDaddy and Hostinger are known for **domain front-running**: when you search for a domain on their site, they may reserve it before you buy, forcing you to pay a higher price. This tool queries WHOIS/DNS servers directly, so no registrar knows what you're looking for.
 
 ## Features
 
-- Checks 30+ TLDs in parallel (.com, .net, .io, .ai, .dev, .com.br, etc.)
-- WHOIS lookup (registrar, expiry, creation date, status, DNSSEC)
+- Checks 40+ TLDs in parallel (.com, .net, .io, .ai, .dev, .com.br, .co.uk, etc.)
+- Direct WHOIS/DNS queries — no registrar middleman
+- WHOIS lookup (registrar, expiry, creation date, owner, status)
 - DNS records (A, AAAA, CNAME, NS, MX, TXT)
 - SSL certificate info (issuer, expiry, SANs)
 - HTTP status and server detection
 - IP geolocation and hosting provider
-- Generates a Markdown report with all results
+- Markdown report generation
 - Color-coded terminal output with expiry warnings
 
 ## Usage
@@ -24,8 +29,8 @@ npx domain-scan myproject
 ### Global install
 
 ```bash
-npm install -g domain-checker
-domain-checker myproject
+npm install -g domain-scan
+domain-scan myproject
 ```
 
 ### From source
@@ -41,16 +46,19 @@ node index.js myproject
 
 ```bash
 # Quick scan — availability, expiry, and owner
-domain-scan deckforge
+domain-scan myproject
 
 # Deep scan — full WHOIS, DNS, SSL, HTTP, and hosting details
-domain-scan deckforge --deep
+domain-scan myproject --deep
 
 # Save a detailed Markdown report
-domain-scan deckforge --md
+domain-scan myproject --md
+
+# Combine flags
+domain-scan myproject --deep --md
 
 # Pass a URL — it extracts the name automatically
-domain-scan https://www.example.com
+domain-scan https://www.google.com
 ```
 
 ## Options
