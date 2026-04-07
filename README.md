@@ -36,7 +36,7 @@ domain-scan myproject
 ### From source
 
 ```bash
-git clone https://github.com/henrique-leme/domain-checker.git
+git clone https://github.com/henrique-leme/domain-scan.git
 cd domain-checker
 npm install
 node index.js myproject

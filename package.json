@@ -29,12 +29,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/henrique-leme/domain-checker.git"
+    "url": "https://github.com/henrique-leme/domain-scan.git"
   },
   "bugs": {
-    "url": "https://github.com/henrique-leme/domain-checker/issues"
+    "url": "https://github.com/henrique-leme/domain-scan/issues"
   },
-  "homepage": "https://github.com/henrique-leme/domain-checker#readme",
+  "homepage": "https://github.com/henrique-leme/domain-scan#readme",
   "license": "MIT",
   "type": "commonjs",
   "engines": {
