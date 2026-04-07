@@ -328,8 +328,8 @@ function printResult(r) {
 
   sec(`${domain} — WHOIS`);
   row('Domain',        w.domainName || domain);
-  row('Registrar',     w.registrar);
-  row('Registrar URL', w.registrarUrl);
+  row('Provider',      w.registrar);
+  row('Provider URL',  w.registrarUrl);
   const expDays = daysUntil(w.expiresAt);
   console.log(`  ${lbl('Expires:')}${expiryColor(expDays)}${w.expiresAt ? chalk.gray(` (${formatDate(w.expiresAt)})`) : ''}`);
   row('Created',       formatDate(w.createdAt));
@@ -412,7 +412,7 @@ function buildMarkdown(results) {
   // Summary table
   lines.push('## Summary');
   lines.push('');
-  lines.push('| Domain | Status | Expires | Registrar | IP | Hosting |');
+  lines.push('| Domain | Status | Expires | Provider | IP | Hosting |');
   lines.push('|--------|:------:|---------|-----------|-----|---------|');
 
   for (const r of results) {
@@ -453,8 +453,8 @@ function buildMarkdown(results) {
       lines.push('');
       lines.push(...mdTable(['Field', 'Value']));
       lines.push(mdRow('Domain', r.whois.domainName || r.domain));
-      lines.push(mdRow('Registrar', r.whois.registrar));
-      lines.push(mdRow('Registrar URL', r.whois.registrarUrl));
+      lines.push(mdRow('Provider', r.whois.registrar));
+      lines.push(mdRow('Provider URL', r.whois.registrarUrl));
       lines.push(mdRow('Expires', expiryTextPlain(expDays, r.whois.expiresAt)));
       lines.push(mdRow('Created', formatDate(r.whois.createdAt)));
       lines.push(mdRow('Updated', formatDate(r.whois.updatedAt)));

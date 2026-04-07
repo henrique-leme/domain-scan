@@ -1,16 +1,16 @@
 # domain-scan
 
-CLI tool to check domain availability across 40+ TLDs at once — querying WHOIS and DNS directly, without going through registrar search pages.
+CLI tool to check domain availability across 40+ TLDs at once — querying WHOIS and DNS directly, without going through provider search pages.
 
 ## Why?
 
-Registrars like GoDaddy and Hostinger are known for **domain front-running**: when you search for a domain on their site, they may reserve it before you buy, forcing you to pay a higher price. This tool queries WHOIS/DNS servers directly, so no registrar knows what you're looking for.
+Domain providers like GoDaddy and Hostinger are known for **domain front-running**: when you search for a domain on their site, they may reserve it before you buy, forcing you to pay a higher price. This tool queries WHOIS/DNS servers directly, so no provider knows what you're looking for.
 
 ## Features
 
 - Checks 40+ TLDs in parallel (.com, .net, .io, .ai, .dev, .com.br, .co.uk, etc.)
-- Direct WHOIS/DNS queries — no registrar middleman
-- WHOIS lookup (registrar, expiry, creation date, owner, status)
+- Direct WHOIS/DNS queries — no provider middleman
+- WHOIS lookup (provider, expiry, creation date, owner, status)
 - DNS records (A, AAAA, CNAME, NS, MX, TXT)
 - SSL certificate info (issuer, expiry, SANs)
 - HTTP status and server detection
@@ -83,7 +83,7 @@ The tool will:
 ## Report Output
 
 When using `--md`, the generated report includes:
-- Summary table with status, expiry, registrar, and hosting
+- Summary table with status, expiry, provider, and hosting
 - List of available domains
 - Detailed breakdown per registered domain (WHOIS, DNS, SSL, HTTP, hosting)
 
