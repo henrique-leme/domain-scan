@@ -16,14 +16,17 @@ const flags = args.filter(a => a.startsWith('--'));
 const positional = args.filter(a => !a.startsWith('--'));
 
 const input = positional[0];
-const flagMd = flags.includes('--md');
+const flagMd   = flags.includes('--md');
+const flagDeep = flags.includes('--deep');
 
 if (!input || flags.includes('--help')) {
-  console.log(chalk.cyan.bold('\n  domain-checker') + chalk.gray(' — check domain availability across 30+ TLDs\n'));
+  console.log(chalk.cyan.bold('\n  domain-scan') + chalk.gray(' — check domain availability across 30+ TLDs\n'));
   console.log(chalk.white('  Usage:  ') + chalk.green('npx domain-scan <name> [options]'));
   console.log(chalk.white('  Example:') + chalk.gray(' npx domain-scan deckforge'));
+  console.log(chalk.gray('          npx domain-scan deckforge --deep'));
   console.log(chalk.gray('          npx domain-scan deckforge --md\n'));
   console.log(chalk.yellow('  Options:'));
+  console.log(chalk.green('    --deep') + chalk.gray('  Show full details (WHOIS, DNS, SSL, HTTP, hosting)'));
   console.log(chalk.green('    --md') + chalk.gray('    Save a detailed Markdown report to ./output_domain_checker/'));
   console.log(chalk.green('    --help') + chalk.gray('  Show this help message\n'));
   process.exit(input ? 0 : 1);
@@ -493,10 +496,12 @@ async function main() {
   for (const r of results) {
     if (r.registered) {
       const expDays = daysUntil(r.whois.expiresAt);
+      const owner   = r.whois.owner || r.whois.registrar || 'unknown';
       console.log(
         `  ${chalk.red('●')} ${chalk.white.bold(r.domain.padEnd(26))}` +
         `${chalk.gray('registered')}   expires: ${expiryColor(expDays)}` +
-        (r.whois.expiresAt ? chalk.gray(` (${formatDate(r.whois.expiresAt)})`) : '')
+        (r.whois.expiresAt ? chalk.gray(` (${formatDate(r.whois.expiresAt)})`) : '') +
+        chalk.gray(`  owner: ${owner}`)
       );
     } else {
       console.log(`  ${chalk.green('●')} ${chalk.green.bold(r.domain.padEnd(26))}${chalk.green('AVAILABLE')}`);
@@ -505,9 +510,9 @@ async function main() {
 
   console.log(`\n  ${chalk.red('●')} ${registered.length} registered   ${chalk.green('●')} ${available.length} available\n`);
 
-  // ── Registered details ────────────────────────────────────────────────────
-  if (registered.length) {
-    console.log(chalk.bold.white('  ── Registered Domain Details ──'));
+  // ── Registered details (only with --deep) ─────────────────────────────────
+  if (flagDeep && registered.length) {
+    console.log(chalk.bold.white('  ── Deep Scan — Registered Domain Details ──'));
     for (const r of registered) printResult(r);
   }
 

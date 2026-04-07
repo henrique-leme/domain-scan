@@ -40,27 +40,31 @@ node index.js myproject
 ## Examples
 
 ```bash
-# Check all TLDs for "deckforge"
+# Quick scan — availability, expiry, and owner
 domain-scan deckforge
 
-# Pass a URL — it extracts the name automatically
-domain-scan https://www.example.com
+# Deep scan — full WHOIS, DNS, SSL, HTTP, and hosting details
+domain-scan deckforge --deep
 
 # Save a detailed Markdown report
 domain-scan deckforge --md
+
+# Pass a URL — it extracts the name automatically
+domain-scan https://www.example.com
 ```
 
 ## Options
 
 | Flag | Description |
 |------|-------------|
+| `--deep` | Show full details (WHOIS, DNS, SSL, HTTP, hosting) |
 | `--md` | Save a detailed Markdown report to `./output_domain_checker/` |
 | `--help` | Show help message |
 
 The tool will:
 1. Scan all TLDs in parallel
-2. Show a color-coded summary (available / registered)
-3. Print detailed info for registered domains
+2. Show a color-coded summary (availability, expiry date, owner)
+3. With `--deep`: print full details for registered domains
 4. With `--md`: save a Markdown report to `./output_domain_checker/`
 
 ## Report Output
