@@ -11,6 +11,13 @@ const chalk   = require('chalk');
 const ora     = require('ora');
 const boxen   = require('boxen');
 
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const NETWORK_TIMEOUT  = 5000;
+const WHOIS_TIMEOUT    = 8000;
+const MAX_CONCURRENCY  = 10;
+const MS_PER_DAY       = 86400000;
+
 const args = process.argv.slice(2);
 const flags = args.filter(a => a.startsWith('--'));
 const positional = args.filter(a => !a.startsWith('--'));
@@ -63,8 +70,13 @@ const TLDS = [
 ];
 
 const activeTlds = flagOnly
-  ? flagOnly.split('=')[1].split(',').map(t => t.replace(/^\./, '').trim().toLowerCase())
+  ? flagOnly.split('=')[1].split(',').map(t => t.replace(/^\./, '').trim().toLowerCase()).filter(Boolean)
   : TLDS;
+
+if (!activeTlds.length) {
+  console.log(chalk.red('Error: --only requires at least one TLD (e.g. --only=com,io)'));
+  process.exit(1);
+}
 
 const domains = activeTlds.map(tld => `${name}.${tld}`);
 
@@ -80,19 +92,15 @@ function parseDate(s) {
 }
 
 function formatDate(s) {
-  if (!s) return null;
-  s = String(s).trim();
-  const m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  const d = new Date(s);
-  if (isNaN(d)) return s;
+  const d = parseDate(s);
+  if (!d) return s ? String(s).trim() : null;
   return d.toISOString().split('T')[0];
 }
 
 function daysUntil(dateStr) {
   const d = parseDate(dateStr);
   if (!d) return null;
-  return Math.ceil((d - Date.now()) / 86400000);
+  return Math.ceil((d - Date.now()) / MS_PER_DAY);
 }
 
 function expiryTextPlain(days, dateStr) {
@@ -139,11 +147,17 @@ async function getIpInfoCached(ip) {
   return info;
 }
 
+// ─── Result builder ─────────────────────────────────────────────────────────
+
+function makeResult(domain, registered, { whois = {}, dns = { a: [], aaaa: [], mx: [], txt: [], ns: [], cname: [] }, ssl = null, httpInfo = null, ipInfo = null, primaryIp = null } = {}) {
+  return { domain, registered, whois, dns, ssl, httpInfo, ipInfo, primaryIp };
+}
+
 // ─── Data fetchers ───────────────────────────────────────────────────────────
 
 async function getWhois(domain) {
   try {
-    const result = await whoiser.whoisDomain(domain, { follow: 2, timeout: 8000 });
+    const result = await whoiser.whoisDomain(domain, { follow: 2, timeout: WHOIS_TIMEOUT });
     const data = Object.values(result).find(r =>
       r['Domain Name'] || r['domain name'] || r['Expiry Date'] ||
       r['Registry Expiry Date'] || r['Expiration Date'] || r['Created']
@@ -207,7 +221,7 @@ async function getDns(domain) {
 
 function getSsl(host) {
   return new Promise(resolve => {
-    const socket = tls.connect(443, host, { servername: host, timeout: 5000, rejectUnauthorized: false }, () => {
+    const socket = tls.connect(443, host, { servername: host, timeout: NETWORK_TIMEOUT, rejectUnauthorized: false }, () => {
       const cert = socket.getPeerCertificate();
       socket.destroy();
       if (!cert || !cert.subject) return resolve(null);
@@ -220,57 +234,63 @@ function getSsl(host) {
       });
     });
     socket.on('error', () => resolve(null));
-    socket.setTimeout(5000, () => { socket.destroy(); resolve(null); });
+    socket.setTimeout(NETWORK_TIMEOUT, () => { socket.destroy(); resolve(null); });
   });
+}
+
+function parseHttpResponse(res, extra = {}) {
+  return { status: res.statusCode, server: res.headers['server'] || null, redirect: res.headers['location'] || null, ...extra };
 }
 
 function getHttpStatus(host) {
   return new Promise(resolve => {
-    const req = https.request({ hostname: host, path: '/', method: 'HEAD', timeout: 5000, rejectUnauthorized: false }, res => {
-      resolve({ status: res.statusCode, server: res.headers['server'] || null, redirect: res.headers['location'] || null });
+    const req = https.request({ hostname: host, path: '/', method: 'HEAD', timeout: NETWORK_TIMEOUT, rejectUnauthorized: false }, res => {
+      resolve(parseHttpResponse(res));
     });
     req.on('error', () => {
-      const req2 = http.request({ hostname: host, path: '/', method: 'HEAD', timeout: 5000 }, res => {
-        resolve({ status: res.statusCode, server: res.headers['server'] || null, redirect: res.headers['location'] || null, http: true });
+      const req2 = http.request({ hostname: host, path: '/', method: 'HEAD', timeout: NETWORK_TIMEOUT }, res => {
+        resolve(parseHttpResponse(res, { http: true }));
       });
       req2.on('error', () => resolve(null));
-      req2.setTimeout(5000, () => { req2.destroy(); resolve(null); });
+      req2.setTimeout(NETWORK_TIMEOUT, () => { req2.destroy(); resolve(null); });
       req2.end();
     });
-    req.setTimeout(5000, () => { req.destroy(); });
+    req.setTimeout(NETWORK_TIMEOUT, () => { req.destroy(); resolve(null); });
     req.end();
   });
 }
 
 function getIpInfo(ip) {
   return new Promise(resolve => {
-    const req = http.request({ hostname: 'ip-api.com', path: `/json/${ip}?fields=country,regionName,city,isp,org,as`, method: 'GET', timeout: 5000 }, res => {
+    const req = http.request({ hostname: 'ip-api.com', path: `/json/${ip}?fields=country,regionName,city,isp,org,as`, method: 'GET', timeout: NETWORK_TIMEOUT }, res => {
       let body = '';
       res.on('data', d => body += d);
       res.on('end', () => { try { resolve(JSON.parse(body)); } catch { resolve(null); } });
     });
     req.on('error', () => resolve(null));
-    req.setTimeout(5000, () => { req.destroy(); resolve(null); });
+    req.setTimeout(NETWORK_TIMEOUT, () => { req.destroy(); resolve(null); });
     req.end();
   });
 }
 
 // ─── Check single domain ─────────────────────────────────────────────────────
 
+function isWhoisRegistered(whois) {
+  const statusAvailable = whois.status && /^(available|no match|not found|free)$/i.test(whois.status.trim());
+  return !statusAvailable && !!(whois.domainName || whois.registrar || whois.createdAt || whois.expiresAt);
+}
+
+function hasDnsRecords(dns) {
+  return dns.a.length > 0 || dns.aaaa.length > 0 || dns.ns.length > 0;
+}
+
 async function checkDomain(domain) {
   // DNS first — it's fast. If no DNS, check WHOIS to confirm availability.
   const dnsData = await getDns(domain);
-  const hasDns  = dnsData.a.length > 0 || dnsData.aaaa.length > 0 || dnsData.ns.length > 0;
 
-  if (!hasDns) {
-    // No DNS — quick WHOIS check to be sure
+  if (!hasDnsRecords(dnsData)) {
     const whois = await getWhois(domain);
-    const statusAvailable = whois.status && /^(available|no match|not found|free)$/i.test(whois.status.trim());
-    const hasWhois = !statusAvailable && !!(whois.domainName || whois.registrar || whois.createdAt || whois.expiresAt);
-    if (!hasWhois) {
-      return { domain, registered: false, whois: {}, dns: dnsData, ssl: null, httpInfo: null, ipInfo: null, primaryIp: null };
-    }
-    return { domain, registered: true, whois, dns: dnsData, ssl: null, httpInfo: null, ipInfo: null, primaryIp: null };
+    return makeResult(domain, isWhoisRegistered(whois), { whois, dns: dnsData });
   }
 
   // Has DNS — fetch everything in parallel
@@ -282,7 +302,7 @@ async function checkDomain(domain) {
     getIpInfoCached(primaryIp),
   ]);
 
-  return { domain, registered: true, whois, dns: dnsData, ssl, httpInfo, ipInfo, primaryIp };
+  return makeResult(domain, true, { whois, dns: dnsData, ssl, httpInfo, ipInfo, primaryIp });
 }
 
 // ─── Console print ───────────────────────────────────────────────────────────
@@ -367,6 +387,17 @@ function printResult(r) {
 
 // ─── Markdown builder ────────────────────────────────────────────────────────
 
+function mdTable(cols) {
+  return [
+    `| ${cols.join(' | ')} |`,
+    `|${cols.map(() => '-------').join('|')}|`,
+  ];
+}
+
+function mdRow(field, value) {
+  return `| ${field} | ${value || 'N/A'} |`;
+}
+
 function buildMarkdown(results) {
   const date = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
   const lines = [];
@@ -417,29 +448,27 @@ function buildMarkdown(results) {
       lines.push('');
 
       // WHOIS
+      const expDays = daysUntil(r.whois.expiresAt);
       lines.push('#### WHOIS / Registration');
       lines.push('');
-      lines.push('| Field | Value |');
-      lines.push('|-------|-------|');
-      lines.push(`| Domain | ${r.whois.domainName || r.domain} |`);
-      lines.push(`| Registrar | ${r.whois.registrar || 'N/A'} |`);
-      lines.push(`| Registrar URL | ${r.whois.registrarUrl || 'N/A'} |`);
-      const expDays = daysUntil(r.whois.expiresAt);
-      lines.push(`| Expires | ${expiryTextPlain(expDays, r.whois.expiresAt)} |`);
-      lines.push(`| Created | ${formatDate(r.whois.createdAt) || 'N/A'} |`);
-      lines.push(`| Updated | ${formatDate(r.whois.updatedAt) || 'N/A'} |`);
-      lines.push(`| Status | ${r.whois.status || 'N/A'} |`);
-      lines.push(`| DNSSEC | ${r.whois.dnssec || 'N/A'} |`);
+      lines.push(...mdTable(['Field', 'Value']));
+      lines.push(mdRow('Domain', r.whois.domainName || r.domain));
+      lines.push(mdRow('Registrar', r.whois.registrar));
+      lines.push(mdRow('Registrar URL', r.whois.registrarUrl));
+      lines.push(mdRow('Expires', expiryTextPlain(expDays, r.whois.expiresAt)));
+      lines.push(mdRow('Created', formatDate(r.whois.createdAt)));
+      lines.push(mdRow('Updated', formatDate(r.whois.updatedAt)));
+      lines.push(mdRow('Status', r.whois.status));
+      lines.push(mdRow('DNSSEC', r.whois.dnssec));
       lines.push('');
 
       // Owner
       lines.push('#### Registrant / Owner');
       lines.push('');
-      lines.push('| Field | Value |');
-      lines.push('|-------|-------|');
-      lines.push(`| Name | ${r.whois.owner || 'N/A'} |`);
-      lines.push(`| Email | ${r.whois.ownerEmail || 'N/A'} |`);
-      lines.push(`| Country | ${r.whois.ownerCountry || 'N/A'} |`);
+      lines.push(...mdTable(['Field', 'Value']));
+      lines.push(mdRow('Name', r.whois.owner));
+      lines.push(mdRow('Email', r.whois.ownerEmail));
+      lines.push(mdRow('Country', r.whois.ownerCountry));
       lines.push('');
 
       // DNS
@@ -447,14 +476,13 @@ function buildMarkdown(results) {
       if (r.dns.a.length || r.dns.aaaa.length || ns.length || r.dns.mx.length || r.dns.txt.length) {
         lines.push('#### DNS Records');
         lines.push('');
-        lines.push('| Type | Value |');
-        lines.push('|------|-------|');
-        if (r.dns.a.length)    lines.push(`| A (IPv4) | ${r.dns.a.join(', ')} |`);
-        if (r.dns.aaaa.length) lines.push(`| AAAA (IPv6) | ${r.dns.aaaa.join(', ')} |`);
-        if (r.dns.cname.length) lines.push(`| CNAME | ${r.dns.cname.join(', ')} |`);
-        if (ns.length)         lines.push(`| NS | ${ns.join(', ')} |`);
-        if (r.dns.mx.length)   lines.push(`| MX | ${r.dns.mx.join('<br>')} |`);
-        if (r.dns.txt.length)  lines.push(`| TXT | ${r.dns.txt.map(t => `\`${t}\``).join('<br>')} |`);
+        lines.push(...mdTable(['Type', 'Value']));
+        if (r.dns.a.length)     lines.push(mdRow('A (IPv4)', r.dns.a.join(', ')));
+        if (r.dns.aaaa.length)  lines.push(mdRow('AAAA (IPv6)', r.dns.aaaa.join(', ')));
+        if (r.dns.cname.length) lines.push(mdRow('CNAME', r.dns.cname.join(', ')));
+        if (ns.length)          lines.push(mdRow('NS', ns.join(', ')));
+        if (r.dns.mx.length)    lines.push(mdRow('MX', r.dns.mx.join('<br>')));
+        if (r.dns.txt.length)   lines.push(mdRow('TXT', r.dns.txt.map(t => `\`${t}\``).join('<br>')));
         lines.push('');
       }
 
@@ -462,14 +490,13 @@ function buildMarkdown(results) {
       if (r.ipInfo || r.primaryIp) {
         lines.push('#### Hosting / IP Info');
         lines.push('');
-        lines.push('| Field | Value |');
-        lines.push('|-------|-------|');
-        lines.push(`| IP Address | ${r.primaryIp || 'N/A'} |`);
+        lines.push(...mdTable(['Field', 'Value']));
+        lines.push(mdRow('IP Address', r.primaryIp));
         if (r.ipInfo) {
-          lines.push(`| ISP | ${r.ipInfo.isp || 'N/A'} |`);
-          lines.push(`| Organization | ${r.ipInfo.org || 'N/A'} |`);
-          lines.push(`| ASN | ${r.ipInfo.as || 'N/A'} |`);
-          lines.push(`| Location | ${[r.ipInfo.city, r.ipInfo.regionName, r.ipInfo.country].filter(Boolean).join(', ')} |`);
+          lines.push(mdRow('ISP', r.ipInfo.isp));
+          lines.push(mdRow('Organization', r.ipInfo.org));
+          lines.push(mdRow('ASN', r.ipInfo.as));
+          lines.push(mdRow('Location', [r.ipInfo.city, r.ipInfo.regionName, r.ipInfo.country].filter(Boolean).join(', ')));
         }
         lines.push('');
       }
@@ -479,13 +506,12 @@ function buildMarkdown(results) {
         const sslDays = daysUntil(r.ssl.validTo);
         lines.push('#### SSL Certificate');
         lines.push('');
-        lines.push('| Field | Value |');
-        lines.push('|-------|-------|');
-        lines.push(`| Subject | ${r.ssl.subject || 'N/A'} |`);
-        lines.push(`| Issuer | ${r.ssl.issuer || 'N/A'} |`);
-        lines.push(`| Valid From | ${formatDate(r.ssl.validFrom) || 'N/A'} |`);
-        lines.push(`| Valid Until | ${expiryTextPlain(sslDays, r.ssl.validTo)} |`);
-        if (r.ssl.san.length) lines.push(`| SANs | ${r.ssl.san.join(', ')} |`);
+        lines.push(...mdTable(['Field', 'Value']));
+        lines.push(mdRow('Subject', r.ssl.subject));
+        lines.push(mdRow('Issuer', r.ssl.issuer));
+        lines.push(mdRow('Valid From', formatDate(r.ssl.validFrom)));
+        lines.push(mdRow('Valid Until', expiryTextPlain(sslDays, r.ssl.validTo)));
+        if (r.ssl.san.length) lines.push(mdRow('SANs', r.ssl.san.join(', ')));
         lines.push('');
       }
 
@@ -493,12 +519,11 @@ function buildMarkdown(results) {
       if (r.httpInfo) {
         lines.push('#### HTTP');
         lines.push('');
-        lines.push('| Field | Value |');
-        lines.push('|-------|-------|');
-        lines.push(`| Protocol | ${r.httpInfo.http ? 'HTTP' : 'HTTPS'} |`);
-        lines.push(`| Status Code | ${r.httpInfo.status} |`);
-        if (r.httpInfo.server)   lines.push(`| Server | ${r.httpInfo.server} |`);
-        if (r.httpInfo.redirect) lines.push(`| Redirects to | ${r.httpInfo.redirect} |`);
+        lines.push(...mdTable(['Field', 'Value']));
+        lines.push(mdRow('Protocol', r.httpInfo.http ? 'HTTP' : 'HTTPS'));
+        lines.push(mdRow('Status Code', r.httpInfo.status));
+        if (r.httpInfo.server)   lines.push(mdRow('Server', r.httpInfo.server));
+        if (r.httpInfo.redirect) lines.push(mdRow('Redirects to', r.httpInfo.redirect));
         lines.push('');
       }
 
@@ -514,7 +539,7 @@ function buildMarkdown(results) {
 
 async function main() {
   console.log('\n' + boxen(
-    chalk.bold.white('  Domain Checker') + '\n' +
+    chalk.bold.white('  Domain Scan') + '\n' +
     chalk.gray(`  Scanning: ${chalk.cyan(name + '.*')}  — ${domains.length} TLDs`),
     { padding: { top: 0, bottom: 0, left: 1, right: 1 }, borderStyle: 'round', borderColor: 'cyan' }
   ));
@@ -529,7 +554,7 @@ async function main() {
       return r;
     })
   );
-  const results = await runPool(tasks, 10);
+  const results = await runPool(tasks, MAX_CONCURRENCY);
 
   spinner.stop();
 
