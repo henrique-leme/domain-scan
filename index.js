@@ -20,9 +20,9 @@ const flagMd = flags.includes('--md');
 
 if (!input || flags.includes('--help')) {
   console.log(chalk.cyan.bold('\n  domain-checker') + chalk.gray(' — check domain availability across 30+ TLDs\n'));
-  console.log(chalk.white('  Usage:  ') + chalk.green('npx domain-checker <name> [options]'));
-  console.log(chalk.white('  Example:') + chalk.gray(' npx domain-checker deckforge'));
-  console.log(chalk.gray('          npx domain-checker deckforge --md\n'));
+  console.log(chalk.white('  Usage:  ') + chalk.green('npx domain-scan <name> [options]'));
+  console.log(chalk.white('  Example:') + chalk.gray(' npx domain-scan deckforge'));
+  console.log(chalk.gray('          npx domain-scan deckforge --md\n'));
   console.log(chalk.yellow('  Options:'));
   console.log(chalk.green('    --md') + chalk.gray('    Save a detailed Markdown report to ./output_domain_checker/'));
   console.log(chalk.green('    --help') + chalk.gray('  Show this help message\n'));

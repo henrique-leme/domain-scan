@@ -18,7 +18,7 @@ CLI tool to check domain availability across 30+ TLDs at once. Gets WHOIS, DNS, 
 ### With npx (no install needed)
 
 ```bash
-npx domain-checker myproject
+npx domain-scan myproject
 ```
 
 ### Global install
@@ -41,13 +41,13 @@ node index.js myproject
 
 ```bash
 # Check all TLDs for "deckforge"
-domain-checker deckforge
+domain-scan deckforge
 
 # Pass a URL — it extracts the name automatically
-domain-checker https://www.example.com
+domain-scan https://www.example.com
 
 # Save a detailed Markdown report
-domain-checker deckforge --md
+domain-scan deckforge --md
 ```
 
 ## Options
