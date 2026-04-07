@@ -112,6 +112,33 @@ function expiryColor(days) {
   return chalk.green(`${days} days`);
 }
 
+// ─── Concurrency pool ────────────────────────────────────────────────────────
+
+async function runPool(tasks, concurrency = 10) {
+  const results = [];
+  let i = 0;
+  async function worker() {
+    while (i < tasks.length) {
+      const idx = i++;
+      results[idx] = await tasks[idx]();
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
+  return results;
+}
+
+// ─── IP info cache ───────────────────────────────────────────────────────────
+
+const ipInfoCache = new Map();
+
+async function getIpInfoCached(ip) {
+  if (!ip) return null;
+  if (ipInfoCache.has(ip)) return ipInfoCache.get(ip);
+  const info = await getIpInfo(ip);
+  ipInfoCache.set(ip, info);
+  return info;
+}
+
 // ─── Data fetchers ───────────────────────────────────────────────────────────
 
 async function getWhois(domain) {
@@ -231,22 +258,28 @@ function getIpInfo(ip) {
 // ─── Check single domain ─────────────────────────────────────────────────────
 
 async function checkDomain(domain) {
-  const [whois, dnsData] = await Promise.all([getWhois(domain), getDns(domain)]);
+  // DNS first — it's fast. If no DNS, check WHOIS to confirm availability.
+  const dnsData = await getDns(domain);
+  const hasDns  = dnsData.a.length > 0 || dnsData.aaaa.length > 0 || dnsData.ns.length > 0;
 
-  // Some WHOIS servers return "AVAILABLE" or "No match" for free domains
-  const statusAvailable = whois.status && /^(available|no match|not found|free)$/i.test(whois.status.trim());
-  const hasWhois = !statusAvailable && !!(whois.domainName || whois.registrar || whois.createdAt || whois.expiresAt);
-  const hasDns   = dnsData.a.length > 0 || dnsData.aaaa.length > 0 || dnsData.ns.length > 0;
-
-  if (!hasWhois && !hasDns) {
-    return { domain, registered: false, whois: {}, dns: dnsData, ssl: null, httpInfo: null, ipInfo: null, primaryIp: null };
+  if (!hasDns) {
+    // No DNS — quick WHOIS check to be sure
+    const whois = await getWhois(domain);
+    const statusAvailable = whois.status && /^(available|no match|not found|free)$/i.test(whois.status.trim());
+    const hasWhois = !statusAvailable && !!(whois.domainName || whois.registrar || whois.createdAt || whois.expiresAt);
+    if (!hasWhois) {
+      return { domain, registered: false, whois: {}, dns: dnsData, ssl: null, httpInfo: null, ipInfo: null, primaryIp: null };
+    }
+    return { domain, registered: true, whois, dns: dnsData, ssl: null, httpInfo: null, ipInfo: null, primaryIp: null };
   }
 
+  // Has DNS — fetch everything in parallel
   const primaryIp = dnsData.a[0] || null;
-  const [ssl, httpInfo, ipInfo] = await Promise.all([
+  const [whois, ssl, httpInfo, ipInfo] = await Promise.all([
+    getWhois(domain),
     getSsl(domain),
     getHttpStatus(domain),
-    primaryIp ? getIpInfo(primaryIp) : Promise.resolve(null),
+    getIpInfoCached(primaryIp),
   ]);
 
   return { domain, registered: true, whois, dns: dnsData, ssl, httpInfo, ipInfo, primaryIp };
@@ -489,15 +522,14 @@ async function main() {
   const spinner = ora({ text: `Checking ${domains.length} domains in parallel...`, color: 'cyan' }).start();
 
   let done = 0;
-  const results = await Promise.all(
-    domains.map(d =>
-      checkDomain(d).then(r => {
-        done++;
-        spinner.text = `[${done}/${domains.length}] ${d} → ${r.registered ? chalk.red('registered') : chalk.green('available')}`;
-        return r;
-      })
-    )
+  const tasks = domains.map(d => () =>
+    checkDomain(d).then(r => {
+      done++;
+      spinner.text = `[${done}/${domains.length}] ${d} → ${r.registered ? chalk.red('registered') : chalk.green('available')}`;
+      return r;
+    })
   );
+  const results = await runPool(tasks, 10);
 
   spinner.stop();
 
