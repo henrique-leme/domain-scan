@@ -54,6 +54,10 @@ domain-scan myproject --deep
 # Save a detailed Markdown report
 domain-scan myproject --md
 
+# Check only specific TLDs
+domain-scan myproject --only=com
+domain-scan myproject --only=com,com.br,io
+
 # Combine flags
 domain-scan myproject --deep --md
 
@@ -65,6 +69,7 @@ domain-scan https://www.google.com
 
 | Flag | Description |
 |------|-------------|
+| `--only=<ext>` | Check specific TLDs (comma-separated, e.g. `--only=com,io,com.br`) |
 | `--deep` | Show full details (WHOIS, DNS, SSL, HTTP, hosting) |
 | `--md` | Save a detailed Markdown report to `./output_domain_checker/` |
 | `--help` | Show help message |

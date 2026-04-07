@@ -18,17 +18,20 @@ const positional = args.filter(a => !a.startsWith('--'));
 const input = positional[0];
 const flagMd   = flags.includes('--md');
 const flagDeep = flags.includes('--deep');
+const flagOnly  = flags.find(f => f.startsWith('--only='));
 
 if (!input || flags.includes('--help')) {
-  console.log(chalk.cyan.bold('\n  domain-scan') + chalk.gray(' — check domain availability across 30+ TLDs\n'));
+  console.log(chalk.cyan.bold('\n  domain-scan') + chalk.gray(' — check domain availability across 40+ TLDs\n'));
   console.log(chalk.white('  Usage:  ') + chalk.green('npx domain-scan <name> [options]'));
   console.log(chalk.white('  Example:') + chalk.gray(' npx domain-scan myproject'));
   console.log(chalk.gray('          npx domain-scan myproject --deep'));
-  console.log(chalk.gray('          npx domain-scan myproject --md\n'));
+  console.log(chalk.gray('          npx domain-scan myproject --only=com'));
+  console.log(chalk.gray('          npx domain-scan myproject --only=com,com.br,io\n'));
   console.log(chalk.yellow('  Options:'));
-  console.log(chalk.green('    --deep') + chalk.gray('  Show full details (WHOIS, DNS, SSL, HTTP, hosting)'));
-  console.log(chalk.green('    --md') + chalk.gray('    Save a detailed Markdown report to ./output_domain_checker/'));
-  console.log(chalk.green('    --help') + chalk.gray('  Show this help message\n'));
+  console.log(chalk.green('    --only=<ext>') + chalk.gray('  Check specific TLDs (comma-separated, e.g. --only=com,io,com.br)'));
+  console.log(chalk.green('    --deep') + chalk.gray('      Show full details (WHOIS, DNS, SSL, HTTP, hosting)'));
+  console.log(chalk.green('    --md') + chalk.gray('        Save a detailed Markdown report to ./output_domain_checker/'));
+  console.log(chalk.green('    --help') + chalk.gray('      Show this help message\n'));
   process.exit(input ? 0 : 1);
 }
 
@@ -59,7 +62,11 @@ const TLDS = [
   'in', 'jp', 'kr', 'com.au', 'ca',
 ];
 
-const domains = TLDS.map(tld => `${name}.${tld}`);
+const activeTlds = flagOnly
+  ? flagOnly.split('=')[1].split(',').map(t => t.replace(/^\./, '').trim().toLowerCase())
+  : TLDS;
+
+const domains = activeTlds.map(tld => `${name}.${tld}`);
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
 
