@@ -45,17 +45,27 @@ domain-checker deckforge
 
 # Pass a URL — it extracts the name automatically
 domain-checker https://www.example.com
+
+# Save a detailed Markdown report
+domain-checker deckforge --md
 ```
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--md` | Save a detailed Markdown report to `./output_domain_checker/` |
+| `--help` | Show help message |
 
 The tool will:
 1. Scan all TLDs in parallel
 2. Show a color-coded summary (available / registered)
 3. Print detailed info for registered domains
-4. Save a Markdown report to `./output/`
+4. With `--md`: save a Markdown report to `./output_domain_checker/`
 
-## Output
+## Report Output
 
-The generated report includes:
+When using `--md`, the generated report includes:
 - Summary table with status, expiry, registrar, and hosting
 - List of available domains
 - Detailed breakdown per registered domain (WHOIS, DNS, SSL, HTTP, hosting)

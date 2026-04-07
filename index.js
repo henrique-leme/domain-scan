@@ -11,12 +11,22 @@ const chalk   = require('chalk');
 const ora     = require('ora');
 const boxen   = require('boxen');
 
-const input = process.argv[2];
+const args = process.argv.slice(2);
+const flags = args.filter(a => a.startsWith('--'));
+const positional = args.filter(a => !a.startsWith('--'));
 
-if (!input) {
-  console.log(chalk.red('Usage: node index.js <name>'));
-  console.log(chalk.gray('Example: node index.js deckforge'));
-  process.exit(1);
+const input = positional[0];
+const flagMd = flags.includes('--md');
+
+if (!input || flags.includes('--help')) {
+  console.log(chalk.cyan.bold('\n  domain-checker') + chalk.gray(' — check domain availability across 30+ TLDs\n'));
+  console.log(chalk.white('  Usage:  ') + chalk.green('npx domain-checker <name> [options]'));
+  console.log(chalk.white('  Example:') + chalk.gray(' npx domain-checker deckforge'));
+  console.log(chalk.gray('          npx domain-checker deckforge --md\n'));
+  console.log(chalk.yellow('  Options:'));
+  console.log(chalk.green('    --md') + chalk.gray('    Save a detailed Markdown report to ./output_domain_checker/'));
+  console.log(chalk.green('    --help') + chalk.gray('  Show this help message\n'));
+  process.exit(input ? 0 : 1);
 }
 
 // Strip URL / www / path / any TLD — keep only the SLD name
@@ -501,15 +511,18 @@ async function main() {
     for (const r of registered) printResult(r);
   }
 
-  // ── Write output/<name>_YYYY-MM-DD_HH-MM-SS.md ───────────────────────────
-  const md      = buildMarkdown(results);
-  const ts      = new Date().toISOString().replace('T', '_').replace(/:/g, '-').slice(0, 19);
-  const outDir  = path.join(__dirname, 'output');
-  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
-  const outPath = path.join(outDir, `${name}_${ts}.md`);
-  fs.writeFileSync(outPath, md, 'utf8');
-
-  console.log('\n' + chalk.cyan(`  Report saved → ${outPath}`) + '\n');
+  // ── Write markdown report (only with --md flag) ──────────────────────────
+  if (flagMd) {
+    const md      = buildMarkdown(results);
+    const ts      = new Date().toISOString().replace('T', '_').replace(/:/g, '-').slice(0, 19);
+    const outDir  = path.join(process.cwd(), 'output_domain_checker');
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+    const outPath = path.join(outDir, `${name}_${ts}.md`);
+    fs.writeFileSync(outPath, md, 'utf8');
+    console.log('\n' + chalk.cyan(`  Report saved → ${outPath}`) + '\n');
+  } else {
+    console.log('');
+  }
 }
 
 main().catch(err => {
