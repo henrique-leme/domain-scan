@@ -1,6 +1,6 @@
 {
   "name": "domain-scan",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "CLI tool to check domain WHOIS, DNS, SSL and hosting info",
   "main": "index.js",
   "bin": {
